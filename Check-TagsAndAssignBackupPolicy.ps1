@@ -1,7 +1,5 @@
 function Check-TagsAndAssignBackupPolicy {
     param(
-        [string]$LogAnalyticsWorkspaceId,
-        [string]$LogAnalyticsSharedKey,
         [string]$LawWorkspaceName,
         [string]$LawResourceGroup
     )
@@ -116,13 +114,10 @@ function Get-RecoveryServicesVaultAndBackupPolicies {
     }
 }
 
-
 function Write-LogAnalytics {
     param (
-        [string]$WorkspaceId,
         [string]$LawWorkspaceName,
         [string]$LawResourcegroup,
-        [string]$SharedKey,
         [string]$ErrorMessage,
         [string]$DifferenceMessage,
         [string]$SuccessMessage
@@ -147,7 +142,7 @@ function Write-LogAnalytics {
     # Send the Log Analytics record
     try {
         $LogAnalyticsCustomerId = (Get-AzOperationalInsightsWorkspace -ResourceGroupName $LawResourcegroup -Name $LawWorkspaceName).CustomerId
-        $LogAnalyticsSharedKey = (Get-AzOperationalInsightsWorkspace -ResourceGroupName $LawResourcegroup -Name $LawWorkspaceName).SharedKeys.PrimarySharedKey
+        $LogAnalyticsSharedKey = (Get-AzOperationalInsightsWorkspaceSharedKey -ResourceGroupName $LawResourcegroup -Name $LawWorkspaceName).PrimarySharedKey
         $LogType = "CustomLog"
         $jsonBody = [System.Text.Encoding]::UTF8.GetBytes($RecordJson)
         $date = [System.DateTime]::UtcNow.ToString("r")
@@ -189,4 +184,35 @@ function Build-Signature {
     $encodedHash = [Convert]::ToBase64String($calculatedHash)
     $authorization = 'SharedKey {0}:{1}' -f $customerId, $encodedHash
     return $authorization
+}
+
+function Search-LogAnalyticsWorkspace {
+    param(
+        [string]$WorkspaceName,
+        [string]$ResourceGroup,
+        [string]$CurrentSubscriptionName
+    )
+
+    # Iterate over all subscriptions
+    $Subscriptions = Get-AzSubscription
+
+    foreach ($Subscription in $Subscriptions) {
+        # Check if the subscription is the current subscription
+        if ($Subscription.Name -eq $CurrentSubscriptionName) {
+            # Select the current subscription
+            Select-AzSubscription -SubscriptionId $Subscription.Id
+        }
+        else {
+            # Skip the subscription
+            continue
+        }
+
+        # Check if the Log Analytics workspace exists
+        $LogAnalyticsWorkspace = Get-AzOperationalInsightsWorkspace -ResourceGroupName $ResourceGroup -Name $WorkspaceName -ErrorAction SilentlyContinue
+
+        if ($LogAnalyticsWorkspace -ne $null) {
+            # Return the Log Analytics workspace
+            return $LogAnalyticsWorkspace
+        }
+    }
 }
